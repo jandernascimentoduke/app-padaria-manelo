@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { ArrowLeft, Award, CheckCircle, XCircle, Clock, TrendingUp, Gift, Calendar, AlertCircle, Plus, Camera, Upload, Loader2, User, Phone } from "lucide-react"
+import { ArrowLeft, Award, CheckCircle, XCircle, Clock, TrendingUp, Gift, Calendar, AlertCircle, Plus, Camera, Upload, User, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createWorker } from 'tesseract.js'
 
 interface Transacao {
   id: string
@@ -34,14 +33,7 @@ export default function PontosPage() {
   const [valorCompra, setValorCompra] = useState("")
   const [imagemComprovante, setImagemComprovante] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [processando, setProcessando] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [resultadoValidacao, setResultadoValidacao] = useState<{
-    valido: boolean
-    mensagem: string
-    nomeEncontrado?: string
-    telefoneEncontrado?: string
-  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
@@ -103,90 +95,6 @@ export default function PontosPage() {
     setImagemComprovante(file)
     const url = URL.createObjectURL(file)
     setPreviewUrl(url)
-    setResultadoValidacao(null)
-  }
-
-  const validarComprovante = async () => {
-    if (!imagemComprovante) {
-      alert("Por favor, selecione uma imagem do comprovante")
-      return
-    }
-
-    setProcessando(true)
-    setResultadoValidacao(null)
-
-    try {
-      // Criar worker do Tesseract.js para OCR
-      const worker = await createWorker('por')
-      const { data: { text } } = await worker.recognize(imagemComprovante)
-      await worker.terminate()
-
-      console.log("Texto extraído:", text)
-
-      // Normalizar texto para busca
-      const textoNormalizado = text.toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-
-      // Buscar nome do cliente no texto
-      let clienteEncontrado: Cliente | null = null
-
-      for (const cliente of clientes) {
-        const primeiroNome = cliente.nome.split(" ")[0].toLowerCase()
-        const nomeCompleto = cliente.nome.toLowerCase()
-        
-        // Buscar primeiro nome ou nome completo
-        if (textoNormalizado.includes(primeiroNome) || textoNormalizado.includes(nomeCompleto)) {
-          clienteEncontrado = cliente
-          break
-        }
-      }
-
-      // Se não encontrou por nome, tentar por telefone
-      if (!clienteEncontrado) {
-        for (const cliente of clientes) {
-          // Extrair apenas números do telefone
-          const telefoneNumeros = cliente.telefone.replace(/\D/g, "")
-          const textoNumeros = text.replace(/\D/g, "")
-          
-          if (textoNumeros.includes(telefoneNumeros)) {
-            clienteEncontrado = cliente
-            break
-          }
-        }
-      }
-
-      // Validar resultado
-      if (clienteEncontrado) {
-        if (clienteEncontrado.status === "ativo") {
-          setResultadoValidacao({
-            valido: true,
-            mensagem: `✅ Comprovante válido! Cliente: ${clienteEncontrado.nome}`,
-            nomeEncontrado: clienteEncontrado.nome,
-            telefoneEncontrado: clienteEncontrado.telefone
-          })
-        } else {
-          setResultadoValidacao({
-            valido: false,
-            mensagem: `❌ Cliente ${clienteEncontrado.nome} está inativo no sistema`,
-            nomeEncontrado: clienteEncontrado.nome
-          })
-        }
-      } else {
-        setResultadoValidacao({
-          valido: false,
-          mensagem: "❌ Não foi possível identificar o cliente no comprovante. Verifique se o nome ou telefone está visível."
-        })
-      }
-    } catch (error) {
-      console.error("Erro ao processar imagem:", error)
-      setResultadoValidacao({
-        valido: false,
-        mensagem: "❌ Erro ao processar a imagem. Tente novamente com uma foto mais nítida."
-      })
-    } finally {
-      setProcessando(false)
-    }
   }
 
   const adicionarCompra = async () => {
@@ -197,11 +105,6 @@ export default function PontosPage() {
 
     if (!imagemComprovante) {
       alert("Por favor, adicione uma foto do comprovante")
-      return
-    }
-
-    if (!resultadoValidacao || !resultadoValidacao.valido) {
-      alert("Por favor, valide o comprovante antes de adicionar a compra")
       return
     }
 
@@ -216,19 +119,18 @@ export default function PontosPage() {
       id: Date.now().toString(),
       tipo: "pendente",
       pontos: pontosGanhos,
-      descricao: `Compra de R$ ${valor.toFixed(2)} - ${resultadoValidacao.nomeEncontrado}`,
+      descricao: `Compra de R$ ${valor.toFixed(2)}`,
       data: hoje.toISOString().split('T')[0],
       status: "pendente",
       dataExpiracao: dataExpiracao.toISOString().split('T')[0],
       comprovanteUrl: previewUrl || undefined,
-      validado: true
+      validado: false
     }
 
     setTransacoes(prev => [novaTransacao, ...prev])
     setValorCompra("")
     setImagemComprovante(null)
     setPreviewUrl(null)
-    setResultadoValidacao(null)
     setMostrarFormulario(false)
   }
 
@@ -364,12 +266,12 @@ export default function PontosPage() {
           Registrar Nova Compra
         </Button>
 
-        {/* Formulário de Compra com Validação */}
+        {/* Formulário de Compra Simplificado */}
         {mostrarFormulario && (
           <Card className="border-2 border-green-500 bg-green-50">
             <CardHeader>
               <CardTitle className="text-[#8B4513]">Nova Compra</CardTitle>
-              <CardDescription>Adicione o comprovante para validação automática</CardDescription>
+              <CardDescription>Adicione o comprovante e o valor da compra</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Upload de Comprovante */}
@@ -435,94 +337,41 @@ export default function PontosPage() {
                       onClick={() => {
                         setImagemComprovante(null)
                         setPreviewUrl(null)
-                        setResultadoValidacao(null)
                       }}
                     >
                       <XCircle className="w-4 h-4" />
                     </Button>
                   </div>
                 )}
-
-                {/* Botão Validar */}
-                {imagemComprovante && !resultadoValidacao && (
-                  <Button
-                    className="w-full mt-3 bg-blue-600 hover:bg-blue-700"
-                    onClick={validarComprovante}
-                    disabled={processando}
-                  >
-                    {processando ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Validando comprovante...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Validar Comprovante
-                      </>
-                    )}
-                  </Button>
-                )}
-
-                {/* Resultado da Validação */}
-                {resultadoValidacao && (
-                  <div className={`mt-3 p-4 rounded-lg ${
-                    resultadoValidacao.valido 
-                      ? "bg-green-100 border-2 border-green-500" 
-                      : "bg-red-100 border-2 border-red-500"
-                  }`}>
-                    <p className={`font-semibold ${
-                      resultadoValidacao.valido ? "text-green-800" : "text-red-800"
-                    }`}>
-                      {resultadoValidacao.mensagem}
-                    </p>
-                    {resultadoValidacao.valido && resultadoValidacao.nomeEncontrado && (
-                      <div className="mt-2 space-y-1 text-sm text-green-700">
-                        <p className="flex items-center gap-2">
-                          <User className="w-4 h-4" />
-                          <strong>Cliente:</strong> {resultadoValidacao.nomeEncontrado}
-                        </p>
-                        {resultadoValidacao.telefoneEncontrado && (
-                          <p className="flex items-center gap-2">
-                            <Phone className="w-4 h-4" />
-                            <strong>Telefone:</strong> {resultadoValidacao.telefoneEncontrado}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Valor da Compra */}
-              {resultadoValidacao?.valido && (
-                <div>
-                  <Label htmlFor="valor" className="text-[#8B4513] font-semibold">
-                    Valor da Compra (R$)
-                  </Label>
-                  <Input
-                    id="valor"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={valorCompra}
-                    onChange={(e) => setValorCompra(e.target.value)}
-                    className="mt-2 text-lg"
-                  />
-                  {valorCompra && (
-                    <p className="text-sm text-green-700 mt-2">
-                      Você ganhará <strong>{Math.floor(parseFloat(valorCompra))} pontos</strong>
-                    </p>
-                  )}
-                </div>
-              )}
+              <div>
+                <Label htmlFor="valor" className="text-[#8B4513] font-semibold">
+                  Valor da Compra (R$)
+                </Label>
+                <Input
+                  id="valor"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={valorCompra}
+                  onChange={(e) => setValorCompra(e.target.value)}
+                  className="mt-2 text-lg"
+                />
+                {valorCompra && (
+                  <p className="text-sm text-green-700 mt-2">
+                    Você ganhará <strong>{Math.floor(parseFloat(valorCompra))} pontos</strong>
+                  </p>
+                )}
+              </div>
 
               {/* Botões de Ação */}
               <div className="flex gap-2">
                 <Button 
                   className="flex-1 bg-green-600 hover:bg-green-700"
                   onClick={adicionarCompra}
-                  disabled={!resultadoValidacao?.valido || !valorCompra}
+                  disabled={!valorCompra || !imagemComprovante}
                 >
                   Adicionar
                 </Button>
@@ -534,7 +383,6 @@ export default function PontosPage() {
                     setValorCompra("")
                     setImagemComprovante(null)
                     setPreviewUrl(null)
-                    setResultadoValidacao(null)
                   }}
                 >
                   Cancelar
@@ -582,12 +430,6 @@ export default function PontosPage() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-semibold text-[#8B4513]">{transacao.descricao}</p>
-                              {transacao.validado && (
-                                <Badge className="bg-green-500 text-white text-xs">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Validado
-                                </Badge>
-                              )}
                             </div>
                             <p className="text-xs text-gray-600 flex items-center gap-1 mt-1">
                               <Calendar className="w-3 h-3" />
@@ -745,8 +587,7 @@ export default function PontosPage() {
             <ul className="text-sm text-gray-700 space-y-1">
               <li>• A cada R$ 1,00 gasto = 1 ponto</li>
               <li>• Tire foto do comprovante de compra</li>
-              <li>• Sistema valida automaticamente o nome do cliente</li>
-              <li>• Confirme seus pontos após validação</li>
+              <li>• Aguarde confirmação do estabelecimento</li>
               <li>• <strong>Pontos não confirmados expiram em 7 dias</strong></li>
             </ul>
           </CardContent>
